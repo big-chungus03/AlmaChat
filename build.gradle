@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'application'
     id 'edu.sc.seis.launch4j' version '4.0.0'
+    id 'com.diffplug.spotless' version '8.8.0'
 }
 
 repositories {
@@ -38,5 +39,14 @@ tasks.register('zip', Zip) {
         from(layout.buildDirectory.dir('launch4j/lib')) {
             into('lib')
         }
+    }
+}
+
+spotless {
+    java {
+        googleJavaFormat().aosp()
+        removeUnusedImports()
+        forbidWildcardImports()
+        target 'src/*/java/**/*.java'
     }
 }
