@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'application'
+    id 'edu.sc.seis.launch4j' version '4.0.0'
 }
 
 repositories {
@@ -9,4 +10,33 @@ repositories {
 
 application {
     mainClass = 'App'
+}
+
+launch4j {
+    mainClassName = 'App'
+    outputDir = 'launch4j'
+    libraryDir = 'lib'
+    jreMinVersion = '25'
+    headerType = 'console'
+    copyConfigurable = [tasks.named('jar'), configurations.runtimeClasspath]
+}
+
+tasks.register('zip', Zip) {
+    group = 'distribution'
+    description = 'Packages the Launch4j .exe and its lib folder into a custom Zip.'
+
+    dependsOn tasks.named('createExe')
+
+    archiveBaseName = 'AlmaChat-windows'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+
+    into('AlmaChat') {
+        from(layout.buildDirectory.dir('launch4j')) {
+            include('*.exe')
+        }
+
+        from(layout.buildDirectory.dir('launch4j/lib')) {
+            into('lib')
+        }
+    }
 }
