@@ -1,21 +1,36 @@
 plugins {
     id 'java'
     id 'application'
+    // releases
     id 'edu.sc.seis.launch4j' version '4.0.0'
+    // linter
     id 'checkstyle'
     id 'se.bjurr.violations.violations-gradle-plugin' version '2.0.0'
+    // ui
+    id 'org.openjfx.javafxplugin' version '0.1.0'
 }
 
 repositories {
     mavenCentral()
 }
 
+dependencies {
+    // logging
+    implementation 'org.slf4j:slf4j-api:2.0.18'
+    implementation 'ch.qos.logback:logback-classic:1.5.38'
+}
+
+javafx {
+    version = '25'
+    modules = ['javafx.controls', 'javafx.graphics']
+}
+
 application {
-    mainClass = 'com.almachat.App'
+    mainClass = 'com.almachat.Launcher'
 }
 
 launch4j {
-    mainClassName = 'com.almachat.App'
+    mainClassName = 'com.almachat.Launcher'
     outputDir = 'launch4j'
     libraryDir = 'lib'
     jreMinVersion = '25'
