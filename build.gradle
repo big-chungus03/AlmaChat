@@ -10,11 +10,11 @@ repositories {
 }
 
 application {
-    mainClass = 'App'
+    mainClass = 'com.almachat.App'
 }
 
 launch4j {
-    mainClassName = 'App'
+    mainClassName = 'com.almachat.App'
     outputDir = 'launch4j'
     libraryDir = 'lib'
     jreMinVersion = '25'
