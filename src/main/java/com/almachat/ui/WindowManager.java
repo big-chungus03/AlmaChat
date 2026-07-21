@@ -18,7 +18,7 @@ import javafx.stage.Stage;
 public class WindowManager {
     private static final Logger LOG = LoggerFactory.getLogger(WindowManager.class);
     private static final String APP_TITLE = "AlmaChat";
-    private static final String ICON_PATH = "/icon.png";
+    private static final String ICON_PATH = "/images/icon.png";
 
     /**
      * Initializes, builds and displays the primary stage.
