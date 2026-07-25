@@ -51,7 +51,7 @@ public class MainView {
         root.setCenter(buildMainScreen());
 
         LOG.info("Main scene constructed successfully.");
-        audioEngine.startLoopback();
+        audioEngine.startStreaming(12000, "localhost", 12000);
         return root;
     }
 
