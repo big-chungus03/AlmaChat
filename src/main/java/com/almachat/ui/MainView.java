@@ -3,6 +3,8 @@ package com.almachat.ui;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.almachat.audio.AudioEngine;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -28,6 +30,8 @@ public class MainView {
     private boolean isMuted = false;
     private boolean isDeafened = false;
 
+    private final AudioEngine audioEngine = new AudioEngine();
+
     /**
      * Constructs the root container for the UI.
      * 
@@ -47,7 +51,16 @@ public class MainView {
         root.setCenter(buildMainScreen());
 
         LOG.info("Main scene constructed successfully.");
+        audioEngine.startLoopback();
         return root;
+    }
+
+    /**
+     * Cleans up background threads and releases audio resources.
+     */
+    public void cleanup() {
+        LOG.info("Cleaning up MainWiew resources...");
+        audioEngine.stop();
     }
 
     /**
@@ -102,15 +115,15 @@ public class MainView {
         Button muteButton = new Button("Mute");
         muteButton.setOnAction(e -> {
             isMuted = !isMuted;
+            audioEngine.setMuted(isMuted);
             muteButton.setText(isMuted ? "Unmute" : "Mute");
-            LOG.info("Audio input state: Muted={}", isMuted);
         });
 
         Button deafenButton = new Button("Deaf");
         deafenButton.setOnAction(e -> {
             isDeafened = !isDeafened;
+            audioEngine.setDeafened(isDeafened);
             deafenButton.setText(isDeafened ? "Undeaf" : "Deaf");
-            LOG.info("Audio output state: Deafened={}", isDeafened);
         });
 
         buttonRow.getChildren().addAll(muteButton, deafenButton);

@@ -28,8 +28,10 @@ public class WindowManager {
     public void initializePrimaryStage(Stage primaryStage) {
         LOG.info("Initializing primary app stage...");
 
+        MainView mainView = new MainView();
+
         // Assemble scene graph from the layout provided by MainView
-        primaryStage.setScene(new Scene(new MainView().getRoot(), 1920, 1080));
+        primaryStage.setScene(new Scene(mainView.getRoot(), 1920, 1080));
 
         // Load window icon from classpath resources
         InputStream iconInputStream = getClass().getResourceAsStream(ICON_PATH);
@@ -38,6 +40,12 @@ public class WindowManager {
         } else {
             LOG.warn("Icon file not found at resource path: {}", ICON_PATH);
         }
+
+        // Clean up audio resources and background threads on window exit
+        primaryStage.setOnCloseRequest(e -> {
+            LOG.info("Window closing... Stopping services...");
+            mainView.cleanup();
+        });
 
         primaryStage.setTitle(APP_TITLE);
         primaryStage.show();
