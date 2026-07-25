@@ -31,6 +31,7 @@ application {
 
 launch4j {
     mainClassName = 'com.almachat.Launcher'
+    icon = "${projectDir}/src/main/resources/images/icon.ico"
     outputDir = 'launch4j'
     libraryDir = 'lib'
     jreMinVersion = '25'
@@ -38,7 +39,8 @@ launch4j {
     copyConfigurable = [tasks.named('jar'), configurations.runtimeClasspath]
 }
 
-tasks.register('zip', Zip) {
+// windows zip distribution
+tasks.register('zipw', Zip) {
     group = 'distribution'
     description = 'Packages the Launch4j .exe and its lib folder into a custom Zip.'
 
