@@ -1,89 +1,49 @@
 plugins {
-    id 'java'
-    id 'application'
-    // releases
-    id 'edu.sc.seis.launch4j' version '4.0.0'
-    // linter
-    id 'checkstyle'
-    id 'se.bjurr.violations.violations-gradle-plugin' version '2.0.0'
-    // ui
-    id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'se.bjurr.violations.violations-gradle-plugin' version '2.0.0' apply false
 }
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    // logging
-    implementation 'org.slf4j:slf4j-api:2.0.18'
-    implementation 'ch.qos.logback:logback-classic:1.5.38'
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+allprojects {
+    repositories {
+        mavenCentral()
     }
 }
 
-javafx {
-    version = '25'
-    modules = ['javafx.controls', 'javafx.graphics']
-}
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'checkstyle'
+    apply plugin: 'se.bjurr.violations.violations-gradle-plugin'
 
-application {
-    mainClass = 'com.almachat.Launcher'
-}
-
-launch4j {
-    mainClassName = 'com.almachat.Launcher'
-    icon = "${projectDir}/src/main/resources/images/icon.ico"
-    outputDir = 'launch4j'
-    libraryDir = 'lib'
-    jreMinVersion = '25'
-    headerType = 'console'
-    copyConfigurable = [tasks.named('jar'), configurations.runtimeClasspath]
-}
-
-// windows zip distribution
-tasks.register('zipw', Zip) {
-    group = 'distribution'
-    description = 'Packages the Launch4j .exe and its lib folder into a custom Zip.'
-
-    dependsOn tasks.named('createExe')
-
-    archiveBaseName = 'AlmaChat-windows'
-    destinationDirectory = layout.buildDirectory.dir('distributions')
-
-    into('AlmaChat') {
-        from(layout.buildDirectory.dir('launch4j')) {
-            include('*.exe')
-        }
-
-        from(layout.buildDirectory.dir('launch4j/lib')) {
-            into('lib')
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
         }
     }
-}
 
-checkstyle {
-    toolVersion = '13.8.0'
-    ignoreFailures = true
-}
+    dependencies {
+        // logging
+        implementation 'org.slf4j:slf4j-api:2.0.18'
+        implementation 'ch.qos.logback:logback-classic:1.5.38'
+    }
 
-tasks.register('violations', se.bjurr.violations.gradle.plugin.ViolationsTask) {
-    maxRuleColumnWidth = 35
-    maxMessageColumnWidth = 120
+    checkstyle {
+        toolVersion = '13.8.0'
+        ignoreFailures = true
+    }
 
-    minSeverity = se.bjurr.violations.lib.model.SEVERITY.INFO
-    detailLevel = se.bjurr.violations.git.ViolationsReporterDetailLevel.VERBOSE
-    maxViolations = 0
+    tasks.register('violations', se.bjurr.violations.gradle.plugin.ViolationsTask) {
+        maxRuleColumnWidth = 35
+        maxMessageColumnWidth = 120
 
-    violations = [
-        ["CHECKSTYLE", layout.buildDirectory.get().asFile.path, ".*/checkstyle/.*\\.xml\$", "Checkstyle"]
-    ]
-}
+        minSeverity = se.bjurr.violations.lib.model.SEVERITY.INFO
+        detailLevel = se.bjurr.violations.git.ViolationsReporterDetailLevel.VERBOSE
+        maxViolations = 0
 
-tasks.named('check') {
-    finalizedBy(tasks.named('violations'))
+        violations = [
+            ["CHECKSTYLE", layout.buildDirectory.get().asFile.path, ".*/checkstyle/.*\\.xml\$", "Checkstyle"]
+        ]
+    }
+
+    tasks.named('check') {
+        finalizedBy(tasks.named('violations'))
+    }
 }

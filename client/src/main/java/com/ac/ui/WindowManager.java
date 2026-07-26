@@ -1,4 +1,4 @@
-package com.almachat.ui;
+package com.ac.ui;
 
 import java.io.InputStream;
 

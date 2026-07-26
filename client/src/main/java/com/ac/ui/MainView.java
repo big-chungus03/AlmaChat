@@ -1,9 +1,9 @@
-package com.almachat.ui;
+package com.ac.ui;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.almachat.audio.AudioEngine;
+import com.ac.audio.AudioEngine;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;

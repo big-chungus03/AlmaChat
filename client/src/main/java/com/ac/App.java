@@ -1,9 +1,9 @@
-package com.almachat;
+package com.ac;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.almachat.ui.WindowManager;
+import com.ac.ui.WindowManager;
 
 import javafx.application.Application;
 import javafx.stage.Stage;

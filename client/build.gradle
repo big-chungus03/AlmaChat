@@ -1,0 +1,53 @@
+plugins {
+    id 'application'
+    // ui
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+    // releases
+    id 'edu.sc.seis.launch4j' version '4.0.0'
+}
+
+javafx {
+    version = '25'
+    modules = ['javafx.controls', 'javafx.graphics']
+}
+
+application {
+    mainClass = 'com.ac.Launcher'
+}
+
+launch4j {
+    mainClassName = 'com.ac.Launcher'
+    icon = "${projectDir}/src/main/resources/images/icon.ico"
+    outputDir = 'launch4j'
+    libraryDir = 'lib'
+    jreMinVersion = '25'
+    headerType = 'console'
+    copyConfigurable = [tasks.named('jar'), configurations.runtimeClasspath]
+}
+
+distributions {
+    main {
+        distributionBaseName = 'AlmaChat'
+    }
+}
+
+// windows zip distribution
+tasks.register('zipw', Zip) {
+    group = 'distribution'
+    description = 'Packages the Launch4j .exe and its lib folder into a custom Zip.'
+
+    dependsOn tasks.named('createExe')
+
+    archiveBaseName = 'AlmaChat-windows'
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+
+    into('AlmaChat') {
+        from(layout.buildDirectory.dir('launch4j')) {
+            include('*.exe')
+        }
+
+        from(layout.buildDirectory.dir('launch4j/lib')) {
+            into('lib')
+        }
+    }
+}
