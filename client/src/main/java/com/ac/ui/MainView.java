@@ -26,6 +26,8 @@ import javafx.scene.layout.VBox;
  */
 public class MainView {
     private static final Logger LOG = LoggerFactory.getLogger(MainView.class);
+    private static final String DEFAULT_SERVER_HOST = "89.168.91.152";
+    private static final int DEFAULT_SERVER_PORT = 50005;
 
     private boolean isMuted = false;
     private boolean isDeafened = false;
@@ -50,8 +52,9 @@ public class MainView {
         LOG.info("Building main workspace...");
         root.setCenter(buildMainScreen());
 
+        // Connect to central VoiceServer on app startup
         LOG.info("Main scene constructed successfully.");
-        audioEngine.startStreaming(12000, "localhost", 12000);
+        audioEngine.startStreaming(DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT);
         return root;
     }
 
@@ -59,8 +62,8 @@ public class MainView {
      * Cleans up background threads and releases audio resources.
      */
     public void cleanup() {
-        LOG.info("Cleaning up MainWiew resources...");
-        audioEngine.stop();
+        LOG.info("Cleaning up MainView resources...");
+        audioEngine.disconnect();
     }
 
     /**
@@ -126,12 +129,22 @@ public class MainView {
             deafenButton.setText(isDeafened ? "Undeaf" : "Deaf");
         });
 
-        buttonRow.getChildren().addAll(muteButton, deafenButton);
+        Button disconnectButton = new Button("Leave");
+        disconnectButton.setOnAction(e -> {
+            if (audioEngine.isConnected()) {
+                audioEngine.disconnect();
+                disconnectButton.setText("Join");
+            } else {
+                audioEngine.startStreaming(DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT);
+                disconnectButton.setText("Leave");
+            }
+        });
+
+        buttonRow.getChildren().addAll(muteButton, deafenButton, disconnectButton);
         panel.getChildren().addAll(userRow, buttonRow);
 
         // Add a top separator before returning
-        VBox controlSection = new VBox(8.0, new Separator(), panel);
-        return controlSection;
+        return new VBox(8.0, new Separator(), panel);
     }
 
     /**

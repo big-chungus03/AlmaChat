@@ -6,6 +6,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import javax.sound.sampled.AudioFormat;
@@ -19,7 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Handles local microphone audio capture and speaker output playback.
+ * Handles local microphone audio capture, central VoiceServer relay
+ * transmission and speaker playback.
  */
 public class AudioEngine {
     private static final Logger LOG = LoggerFactory.getLogger(AudioEngine.class);
@@ -27,10 +29,14 @@ public class AudioEngine {
     // Standard VoIP Format: 48kHz, 16-bit, Stereo, Signed, Little-Endian
     private static final AudioFormat FORMAT = new AudioFormat(48000.0f, 16, 2, true, false);
     private static final int BUFFER_SIZE = 3840; // 20ms per packet
+    private static final String LEAVE_SIGNAL = "LEAVE";
 
     private TargetDataLine micLine;
     private SourceDataLine speakerLine;
     private DatagramSocket socket;
+
+    private InetAddress serverAddr;
+    private int serverPort;
 
     private volatile boolean running = false;
     private volatile boolean muted = false;
@@ -40,24 +46,24 @@ public class AudioEngine {
     private Thread receiverThread;
 
     /**
-     * Starts listening for incoming audio packets on the local port and sending mic
-     * audio to the target IP address and port over UDP.
+     * Binds a local ephemeral port and connects to the central VoiceServer.
      * 
-     * @param localPort  The UDP port to bind for receiving incoming audio
-     * @param targetHost The IP adress or hostname of the remote peer
-     * @param targetPort The UDP port on the remote peer to send audio to
+     * @param serverHost Target IP or hostname of the VoiceServer
+     * @param serverPort Target UDP port of the VoiceServer (default: 50005)
      */
-    public synchronized void startStreaming(int localPort, String targetHost, int targetPort) {
+    public synchronized void startStreaming(String serverHost, int serverPort) {
         if (running) {
             return;
         }
 
         try {
-            LOG.info("Initializing UDP AudioEngine on local port {} -> target {}:{}", localPort, targetHost,
-                    targetPort);
+            this.serverPort = serverPort;
+            this.serverAddr = InetAddress.getByName(serverHost);
 
-            // Initialize UDP socket
-            socket = new DatagramSocket(localPort);
+            LOG.info("Connecting AudioEngine to central VoiceServer at {}:{}...", serverHost, serverPort);
+
+            // Bind to any available local OS port
+            socket = new DatagramSocket();
 
             // Initialize hardware mic input
             DataLine.Info micInfo = new DataLine.Info(TargetDataLine.class, FORMAT);
@@ -73,31 +79,49 @@ public class AudioEngine {
 
             running = true;
 
-            // Start sender thread (mic -> UDP output)
-            InetAddress targetAddr = InetAddress.getByName(targetHost);
-            senderThread = new Thread(() -> sendLoop(targetAddr, targetPort), "AudioSender-Thread");
+            // Start sender thread (mic -> VoiceServer)
+            senderThread = new Thread(() -> sendLoop(serverAddr, serverPort), "AudioSender-Thread");
             senderThread.setDaemon(true);
             senderThread.start();
 
-            // Start receiver thread (UDP input -> speaker)
+            // Start receiver thread (VoiceServer -> speaker)
             receiverThread = new Thread(this::receiveLoop, "AudioReceiver-Thread");
             receiverThread.setDaemon(true);
             receiverThread.start();
 
-            LOG.info("AudioEngine streaming started successfully.");
+            LOG.info("AudioEngine connected and streaming successfully.");
         } catch (SocketException e) {
-            LOG.error("Failed to initialize UDP socket: {}", e.getMessage());
-            LOG.error("Failed to start AudioEngine streaming", e);
+            LOG.error("Failed to initialize UDP socket: {}", e.getMessage(), e);
             stop();
         } catch (LineUnavailableException e) {
-            LOG.error("Failed to initialize input/output due to resource restrictions: {}", e.getMessage());
-            LOG.error("Failed to start AudioEngine streaming", e);
+            LOG.error("Audio hardware resource unavailable: {}", e.getMessage(), e);
             stop();
         } catch (UnknownHostException e) {
-            LOG.error("Failed to start sender thread due to invalid host: {}", e.getMessage());
-            LOG.error("Failed to start AudioEngine streaming", e);
+            LOG.error("Invalid server host address: {}", e.getMessage(), e);
             stop();
         }
+    }
+
+    public synchronized void disconnect() {
+        if (!running) {
+            return;
+        }
+
+        LOG.info("Disconnecting from voice server...");
+
+        // Send LEAVE control packet if socket is active
+        if (socket != null && !socket.isClosed() && serverAddr != null) {
+            try {
+                byte[] leaveData = LEAVE_SIGNAL.getBytes(StandardCharsets.UTF_8);
+                DatagramPacket leavePacket = new DatagramPacket(leaveData, leaveData.length, serverAddr, serverPort);
+                socket.send(leavePacket);
+                LOG.info("Sent LEAVE signal to VoiceServer.");
+            } catch (IOException e) {
+                LOG.warn("Failed to send LEAVE packet to server: {}", e.getMessage());
+            }
+        }
+
+        stop();
     }
 
     /**
@@ -107,6 +131,10 @@ public class AudioEngine {
         byte[] buffer = new byte[BUFFER_SIZE];
 
         while (running) {
+            if (micLine == null || !micLine.isOpen()) {
+                break;
+            }
+
             int bytesRead = micLine.read(buffer, 0, buffer.length);
 
             if (bytesRead <= 0) {
@@ -161,19 +189,33 @@ public class AudioEngine {
         LOG.info("Audio output state: Deafened={}", deafened);
     }
 
+    public boolean isConnected() {
+        return running;
+    }
+
     public synchronized void stop() {
+        if (!running && (socket == null || socket.isClosed())) {
+            return;
+        }
+
         LOG.info("Stopping AudioEngine...");
         running = false;
-        if (socket != null && !socket.isClosed()) {
-            socket.close();
+
+        if (socket != null) {
+            if (!socket.isClosed()) {
+                socket.close();
+            }
+            socket = null;
         }
         if (micLine != null) {
             micLine.stop();
             micLine.close();
+            micLine = null;
         }
         if (speakerLine != null) {
             speakerLine.stop();
             speakerLine.close();
+            speakerLine = null;
         }
         LOG.info("AudioEngine stopped.");
     }
