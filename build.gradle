@@ -20,6 +20,12 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.5.38'
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
 javafx {
     version = '25'
     modules = ['javafx.controls', 'javafx.graphics']
