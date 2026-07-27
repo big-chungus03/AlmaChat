@@ -13,10 +13,12 @@ javafx {
 
 application {
     mainClass = 'com.ac.Launcher'
+    applicationName = 'AlmaChat'
 }
 
 launch4j {
     mainClassName = 'com.ac.Launcher'
+    outfile = 'AlmaChat.exe'
     icon = "${projectDir}/src/main/resources/images/icon.ico"
     outputDir = 'launch4j'
     libraryDir = 'lib'
@@ -38,7 +40,7 @@ tasks.register('zipw', Zip) {
 
     dependsOn tasks.named('createExe')
 
-    archiveBaseName = 'AlmaChat-windows'
+    archiveBaseName = 'AlmaChat-win'
     destinationDirectory = layout.buildDirectory.dir('distributions')
 
     into('AlmaChat') {
