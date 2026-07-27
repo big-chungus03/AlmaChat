@@ -20,7 +20,7 @@ public class VoiceServer {
     private static final Logger LOG = LoggerFactory.getLogger(VoiceServer.class);
 
     private static final int BUFFER_SIZE = 4096; // 4KB audio buffer capacity
-    private static final String LEAVE_SIGNAL = "LEAVE";
+    private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal indicating a client disconnect.
 
     private final int port;
     private DatagramSocket socket;
@@ -33,6 +33,10 @@ public class VoiceServer {
         this.port = port;
     }
 
+    /**
+     * Binds the server socket to the target UDP port and starts the background
+     * listener thread.
+     */
     public void start() {
         if (running) {
             return;
@@ -51,10 +55,14 @@ public class VoiceServer {
         }
     }
 
+    /**
+     * Main background loop that receives UDP packets, handles LEAVE control signal,
+     * registers new socket endpoints and broadcasts audio data.
+     */
     private void listenLoop() {
         byte[] buffer = new byte[BUFFER_SIZE];
 
-        while (running && !socket.isClosed()) {
+        while (running) {
             try {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
                 socket.receive(packet);
@@ -89,6 +97,13 @@ public class VoiceServer {
         }
     }
 
+    /**
+     * Relay s a received audio packet to all registered endpoints except the
+     * original sender.
+     * 
+     * @param packet     The incoming UDP packet containing PCM audio payload
+     * @param senderAddr The socket address of the origin client
+     */
     private void relayPacket(DatagramPacket packet, SocketAddress senderAddr) {
         byte[] data = packet.getData();
         int length = packet.getLength();
@@ -108,17 +123,23 @@ public class VoiceServer {
         }
     }
 
+    /**
+     * Removes an active client endpoint from the relay registry.
+     * 
+     * @param addr The {@link SocketAddress} of the client disconnecting.
+     */
     public void removeClient(SocketAddress addr) {
         if (clients.remove(addr)) {
             LOG.info("Client left voice channel: {}", addr);
         }
     }
 
+    /**
+     * Stops the listener loop and closes the underlying server UDP socket.
+     */
     public void stop() {
         running = false;
-        if (socket != null && !socket.isClosed()) {
-            socket.close();
-        }
+        socket.close();
         LOG.info("VoiceServer stopped.");
     }
 }

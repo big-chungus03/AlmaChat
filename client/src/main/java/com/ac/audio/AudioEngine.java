@@ -29,7 +29,7 @@ public class AudioEngine {
     // Standard VoIP Format: 48kHz, 16-bit, Stereo, Signed, Little-Endian
     private static final AudioFormat FORMAT = new AudioFormat(48000.0f, 16, 2, true, false);
     private static final int BUFFER_SIZE = 3840; // 20ms per packet
-    private static final String LEAVE_SIGNAL = "LEAVE";
+    private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal to notify the server on client exit.
 
     private TargetDataLine micLine;
     private SourceDataLine speakerLine;
@@ -102,6 +102,10 @@ public class AudioEngine {
         }
     }
 
+    /**
+     * Disconnects from the remote VoiceServer by transmitting the LEAVE signal and
+     * calls {@link #stop()}.
+     */
     public synchronized void disconnect() {
         if (!running) {
             return;
@@ -110,7 +114,7 @@ public class AudioEngine {
         LOG.info("Disconnecting from voice server...");
 
         // Send LEAVE control packet if socket is active
-        if (socket != null && !socket.isClosed() && serverAddr != null) {
+        if (!socket.isClosed() && serverAddr != null) {
             try {
                 byte[] leaveData = LEAVE_SIGNAL.getBytes(StandardCharsets.UTF_8);
                 DatagramPacket leavePacket = new DatagramPacket(leaveData, leaveData.length, serverAddr, serverPort);
@@ -126,15 +130,14 @@ public class AudioEngine {
 
     /**
      * Reads mic data continuously and transmits it via UDP packets.
+     * 
+     * @param targetAddr The destination address of the VoiceServer
+     * @param targetPort The destination UDP port of the VoiceServer
      */
     private void sendLoop(InetAddress targetAddr, int targetPort) {
         byte[] buffer = new byte[BUFFER_SIZE];
 
         while (running) {
-            if (micLine == null || !micLine.isOpen()) {
-                break;
-            }
-
             int bytesRead = micLine.read(buffer, 0, buffer.length);
 
             if (bytesRead <= 0) {
@@ -193,29 +196,28 @@ public class AudioEngine {
         return running;
     }
 
+    /**
+     * Stops current background execution, shuts down audio hardware lines and
+     * releases network socket resources.
+     */
     public synchronized void stop() {
-        if (!running && (socket == null || socket.isClosed())) {
+        if (!running && socket.isClosed()) {
             return;
         }
 
         LOG.info("Stopping AudioEngine...");
         running = false;
 
-        if (socket != null) {
-            if (!socket.isClosed()) {
-                socket.close();
-            }
-            socket = null;
+        if (!socket.isClosed()) {
+            socket.close();
         }
-        if (micLine != null) {
+        if (micLine.isOpen()) {
             micLine.stop();
             micLine.close();
-            micLine = null;
         }
-        if (speakerLine != null) {
+        if (speakerLine.isOpen()) {
             speakerLine.stop();
             speakerLine.close();
-            speakerLine = null;
         }
         LOG.info("AudioEngine stopped.");
     }

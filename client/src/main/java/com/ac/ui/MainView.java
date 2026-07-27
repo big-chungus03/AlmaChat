@@ -70,6 +70,8 @@ public class MainView {
      * Builds the fixed-width left sidebar.
      * 
      * Combines channel lists at the top with the user control panel at the bottom.
+     * 
+     * @return The configured {@link VBox} container sidebar
      */
     private VBox buildSidebar() {
         VBox sidebar = new VBox();
@@ -99,6 +101,8 @@ public class MainView {
 
     /**
      * Builds the user control panel pinned to the bottom of the sidebar.
+     * 
+     * @return The configured {@link VBox} containing user state and audio toggles
      */
     private VBox buildControlPanel() {
         VBox panel = new VBox(8.0);
@@ -152,6 +156,8 @@ public class MainView {
      * channel.
      * 
      * This section automatically expands and reflows on window resize / fullscreen.
+     * 
+     * @return The configured {@link VBox} container for the main view screen
      */
     private VBox buildMainScreen() {
         VBox mainScreen = new VBox(20.0);

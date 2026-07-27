@@ -14,6 +14,9 @@ import org.slf4j.LoggerFactory;
 public class Launcher {
     private static final Logger LOG = LoggerFactory.getLogger(Launcher.class);
 
+    /**
+     * Launches the underlying JavaFX application.
+     */
     public static void main(String[] args) {
         LOG.info("Launching App...");
         App.main(args);

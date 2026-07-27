@@ -23,6 +23,9 @@ public class App extends Application {
         new WindowManager().initializePrimaryStage(primaryStage);
     }
 
+    /**
+     * Main entry point invoked by {@link Launcher}.
+     */
     public static void main(String[] args) {
         Application.launch(args);
     }
