@@ -6,6 +6,8 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -19,6 +21,12 @@ import javax.sound.sampled.TargetDataLine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.github.jaredmdobson.concentus.OpusApplication;
+import io.github.jaredmdobson.concentus.OpusDecoder;
+import io.github.jaredmdobson.concentus.OpusEncoder;
+import io.github.jaredmdobson.concentus.OpusException;
+import io.github.jaredmdobson.concentus.OpusSignal;
+
 /**
  * Handles local microphone audio capture, central VoiceServer relay
  * transmission and speaker playback.
@@ -27,13 +35,23 @@ public class AudioEngine {
     private static final Logger LOG = LoggerFactory.getLogger(AudioEngine.class);
 
     // Standard VoIP Format: 48kHz, 16-bit, Stereo, Signed, Little-Endian
-    private static final AudioFormat FORMAT = new AudioFormat(48000.0f, 16, 2, true, false);
-    private static final int BUFFER_SIZE = 960; // 5ms per packet
+    private static final int SAMPLE_RATE = 48000;
+    private static final int CHANNELS = 2;
+    private static final AudioFormat FORMAT = new AudioFormat(SAMPLE_RATE, 16, CHANNELS, true, false);
+
+    // Opus 20ms Frame Size at 48kHz Stereo:
+    // 48000 samples/sec * 0.020 sec = 960 samples per channel per frame.
+    private static final int FRAME_SIZE = 960;
+    private static final int PCM_BYTE_SIZE = FRAME_SIZE * CHANNELS * 2; // 3840 bytes per 20ms frame
+
     private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal to notify the server on client exit.
 
     private TargetDataLine micLine;
     private SourceDataLine speakerLine;
     private DatagramSocket socket;
+
+    private OpusEncoder encoder;
+    private OpusDecoder decoder;
 
     private InetAddress serverAddr;
     private int serverPort;
@@ -62,19 +80,26 @@ public class AudioEngine {
 
             LOG.info("Connecting AudioEngine to central VoiceServer at {}:{}...", serverHost, serverPort);
 
+            // Initialize Opus codecs
+            encoder = new OpusEncoder(SAMPLE_RATE, CHANNELS, OpusApplication.OPUS_APPLICATION_VOIP);
+            encoder.setBitrate(384000); // 384 kbps (Good voice quality)
+            encoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
+
+            decoder = new OpusDecoder(SAMPLE_RATE, CHANNELS);
+
             // Bind to any available local OS port
             socket = new DatagramSocket();
 
             // Initialize hardware mic input
             DataLine.Info micInfo = new DataLine.Info(TargetDataLine.class, FORMAT);
             micLine = (TargetDataLine) AudioSystem.getLine(micInfo);
-            micLine.open(FORMAT, BUFFER_SIZE * 4);
+            micLine.open(FORMAT, PCM_BYTE_SIZE * 4);
             micLine.start();
 
             // Initialize hardware speaker output
             DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, FORMAT);
             speakerLine = (SourceDataLine) AudioSystem.getLine(speakerInfo);
-            speakerLine.open(FORMAT, BUFFER_SIZE * 4);
+            speakerLine.open(FORMAT, PCM_BYTE_SIZE * 4);
             speakerLine.start();
 
             running = true;
@@ -98,6 +123,9 @@ public class AudioEngine {
             stop();
         } catch (UnknownHostException e) {
             LOG.error("Invalid server host address: {}", e.getMessage(), e);
+            stop();
+        } catch (OpusException e) {
+            LOG.error("Failed to initialize Opus codecs: {}", e.getMessage(), e);
             stop();
         }
     }
@@ -135,26 +163,50 @@ public class AudioEngine {
      * @param targetPort The destination UDP port of the VoiceServer
      */
     private void sendLoop(InetAddress targetAddr, int targetPort) {
-        byte[] buffer = new byte[BUFFER_SIZE];
+
+        byte[] pcmByteBuffer = new byte[PCM_BYTE_SIZE];
+        short[] pcmShortBuffer = new short[FRAME_SIZE * CHANNELS];
+        byte[] opusEncodedBuffer = new byte[1275]; // Opus max payload packet size
 
         while (running) {
-            int bytesRead = micLine.read(buffer, 0, buffer.length);
+            int bytesRead = 0;
+            // Ensure full 20ms frame is read before encoding
+            while (running && bytesRead < PCM_BYTE_SIZE) {
+                int read = micLine.read(pcmByteBuffer, bytesRead, PCM_BYTE_SIZE - bytesRead);
+                if (read > 0) {
+                    bytesRead += read;
+                }
+            }
 
-            if (bytesRead <= 0) {
+            if (bytesRead < PCM_BYTE_SIZE) {
                 continue;
             }
 
             // If muted, transmit silence (zeros) so timing stays synced
             if (muted) {
-                Arrays.fill(buffer, (byte) 0);
+                Arrays.fill(pcmByteBuffer, (byte) 0);
             }
 
+            // Convert Little-Endian byte array to 16-bit short PCM samples
+            ByteBuffer.wrap(pcmByteBuffer).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcmShortBuffer);
+
             try {
-                DatagramPacket packet = new DatagramPacket(buffer, bytesRead, targetAddr, targetPort);
-                socket.send(packet);
+                // Encode PCM shorts into Opus payload
+                int encodedBytes = encoder.encode(pcmShortBuffer, 0, FRAME_SIZE, opusEncodedBuffer, 0,
+                        opusEncodedBuffer.length);
+
+                if (encodedBytes > 0) {
+                    DatagramPacket packet = new DatagramPacket(opusEncodedBuffer, encodedBytes, targetAddr, targetPort);
+                    socket.send(packet);
+
+                }
             } catch (IOException e) {
                 if (running) {
                     LOG.warn("Failed to send audio packet: {}", e.getMessage());
+                }
+            } catch (OpusException e) {
+                if (running) {
+                    LOG.warn("Failed to encode audio packet: {}", e.getMessage());
                 }
             }
         }
@@ -164,19 +216,38 @@ public class AudioEngine {
      * Listens for incoming UDP audio packets and writes them to the speaker.
      */
     private void receiveLoop() {
-        byte[] buffer = new byte[BUFFER_SIZE];
+        byte[] udpReceiveBuffer = new byte[1500]; // Standard MTU size
+        short[] decodedPcmShorts = new short[FRAME_SIZE * CHANNELS];
+        byte[] decodedPcmBytes = new byte[PCM_BYTE_SIZE];
 
         while (running) {
             try {
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                DatagramPacket packet = new DatagramPacket(udpReceiveBuffer, udpReceiveBuffer.length);
                 socket.receive(packet);
 
+                // Ignore LEAVE or non-audio packets if routed back
+                if (packet.getLength() <= 10) {
+                    continue;
+                }
+
                 if (!deafened) {
-                    speakerLine.write(packet.getData(), 0, packet.getLength());
+                    // Decode Opus payload back into short PCM samples
+                    int samplesDecoded = decoder.decode(packet.getData(), packet.getOffset(), packet.getLength(),
+                            decodedPcmShorts, 0, FRAME_SIZE, false);
+                    if (samplesDecoded > 0) {
+                        // Convert Short samples back into Little-Endian PCM byte array
+                        ByteBuffer.wrap(decodedPcmBytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                                .put(decodedPcmShorts);
+                        speakerLine.write(decodedPcmBytes, 0, decodedPcmBytes.length);
+                    }
                 }
             } catch (IOException e) {
                 if (running) {
                     LOG.warn("Failed to receive audio packet: {}", e.getMessage());
+                }
+            } catch (OpusException e) {
+                if (running) {
+                    LOG.warn("Failed to decode audio packet: {}", e.getMessage());
                 }
             }
         }
