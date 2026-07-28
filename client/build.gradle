@@ -6,6 +6,11 @@ plugins {
     id 'edu.sc.seis.launch4j' version '4.0.0'
 }
 
+dependencies {
+    // audio compression
+    implementation 'io.github.jaredmdobson:concentus:1.0.2'
+}
+
 javafx {
     version = '25'
     modules = ['javafx.controls', 'javafx.graphics']
