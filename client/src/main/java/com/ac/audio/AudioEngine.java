@@ -28,7 +28,7 @@ public class AudioEngine {
 
     // Standard VoIP Format: 48kHz, 16-bit, Stereo, Signed, Little-Endian
     private static final AudioFormat FORMAT = new AudioFormat(48000.0f, 16, 2, true, false);
-    private static final int BUFFER_SIZE = 3840; // 20ms per packet
+    private static final int BUFFER_SIZE = 960; // 5ms per packet
     private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal to notify the server on client exit.
 
     private TargetDataLine micLine;
