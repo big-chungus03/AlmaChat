@@ -109,11 +109,10 @@ public class VoiceServer {
         int length = packet.getLength();
 
         for (SocketAddress recipientAddr : clients) {
-            // Do NOT echo the audio back to the sender (temporarily disables for debugging
-            // reasons)
-            // if (recipientAddr.equals(senderAddr)) {
-            // continue;
-            // }
+            // Do NOT echo the audio back to the sender
+            if (recipientAddr.equals(senderAddr)) {
+                continue;
+            }
 
             try {
                 DatagramPacket outgoingPacket = new DatagramPacket(data, length, recipientAddr);
