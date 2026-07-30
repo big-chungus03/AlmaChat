@@ -46,6 +46,12 @@ public class AudioEngine {
 
     private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal to notify the server on client exit.
 
+    // DSP processing variables for audio filtering
+    private double hpfPrevInputLeft = 0;
+    private double hpfPrevOutputLeft = 0;
+    private double hpfPrevInputRight = 0;
+    private double hpfPrevOutputRight = 0;
+
     private TargetDataLine micLine;
     private SourceDataLine speakerLine;
     private DatagramSocket socket;
@@ -190,6 +196,10 @@ public class AudioEngine {
             // Convert Little-Endian byte array to 16-bit short PCM samples
             ByteBuffer.wrap(pcmByteBuffer).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcmShortBuffer);
 
+            // DSP pipeline
+            applyHighPassFilter(pcmShortBuffer, FRAME_SIZE); // Filter handling rumble
+            applyLimiter(pcmShortBuffer); // Clamp extreme volume spikes
+
             try {
                 // Encode PCM shorts into Opus payload
                 int encodedBytes = encoder.encode(pcmShortBuffer, 0, FRAME_SIZE, opusEncodedBuffer, 0,
@@ -291,5 +301,59 @@ public class AudioEngine {
             speakerLine.close();
         }
         LOG.info("AudioEngine stopped.");
+    }
+
+    /**
+     * 1st-Order High-Pass FIlter (~80Hz cutoff at 48kHz).
+     * 
+     * Strips out low-frequency handling noise, cable rustle, and desk thumps.
+     * 
+     * @param pcmBuffer      The 16-bit stereo PCM samples to modify in-place
+     * @param samplesChannel The number of audio frames per channel (960 for 20ms at
+     *                       48kHz)
+     */
+    private void applyHighPassFilter(short[] pcmBuffer, int samplesChannel) {
+        // Filter coefficient alpha for ~80Hz cutoff at 48kHz sample rate
+        // alpha = RC / (RC + dt) where RC = 1 / (2 * pi * f_c)
+        final double alpha = 0.989639;
+
+        for (int i = 0; i < samplesChannel; i++) {
+            // Process left channel
+            int leftIdx = i * 2;
+            double currentInputLeft = pcmBuffer[leftIdx];
+            double currentOutputLeft = alpha * (hpfPrevOutputLeft + currentInputLeft - hpfPrevInputLeft);
+            hpfPrevInputLeft = currentInputLeft;
+            hpfPrevOutputLeft = currentOutputLeft;
+            pcmBuffer[leftIdx] = (short) Math.max(-32768, Math.min(32767, currentOutputLeft));
+
+            // Process right channel
+            int rightIdx = i * 2 + 1;
+            double currentInputRight = pcmBuffer[rightIdx];
+            double currentOutputRight = alpha * (hpfPrevOutputRight + currentInputRight - hpfPrevInputRight);
+            hpfPrevInputRight = currentInputRight;
+            hpfPrevOutputRight = currentOutputRight;
+            pcmBuffer[rightIdx] = (short) Math.max(-32768, Math.min(32767, currentOutputRight));
+        }
+    }
+
+    /**
+     * Soft Limiter (Clippper) with a hard threshold.
+     * 
+     * Prevents loud mic bumps from blowing out speakers and ears.
+     * 
+     * @param pcmBuffer The 16-bit stereo PCM samples to modify in-place
+     */
+    private void applyLimiter(short[] pcmBuffer) {
+        final int threshold = 28000; // ~85% of max 16-bit short value (32767)
+
+        for (int i = 0; i < pcmBuffer.length; i++) {
+            int sample = pcmBuffer[i];
+            if (sample > threshold) {
+                // Soft-knee compression above threshold
+                pcmBuffer[i] = (short) (threshold + (sample - threshold) * 0.25);
+            } else if (sample < -threshold) {
+                pcmBuffer[i] = (short) (-threshold + (sample + threshold) * 0.25);
+            }
+        }
     }
 }
