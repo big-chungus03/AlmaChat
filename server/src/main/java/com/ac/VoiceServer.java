@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 public class VoiceServer {
     private static final Logger LOG = LoggerFactory.getLogger(VoiceServer.class);
 
-    private static final int BUFFER_SIZE = 1920; // 2KB audio buffer capacity
+    private static final int BUFFER_SIZE = 4096; // 4KB audio buffer capacity
     private static final String LEAVE_SIGNAL = "LEAVE"; // Control signal indicating a client disconnect.
 
     private final int port;
@@ -109,10 +109,10 @@ public class VoiceServer {
         int length = packet.getLength();
 
         for (SocketAddress recipientAddr : clients) {
-            // Do NOT echo the audio back to the sender
-            if (recipientAddr.equals(senderAddr)) {
-                continue;
-            }
+            // Do NOT echo the audio back to the sender (disabled for debugging)
+            // if (recipientAddr.equals(senderAddr)) {
+            // continue;
+            // }
 
             try {
                 DatagramPacket outgoingPacket = new DatagramPacket(data, length, recipientAddr);
